@@ -83,7 +83,7 @@ export async function readZedSystemId() {
 async function queryKvStore(dbPath, key) {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Database = require("better-sqlite3");
+    const Database = eval("require")("better-sqlite3");
     const db = new Database(dbPath, { readonly: true, fileMustExist: true });
     try {
       const row = db.prepare("SELECT value FROM kv_store WHERE key = ? LIMIT 1").get(key);

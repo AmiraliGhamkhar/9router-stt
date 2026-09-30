@@ -1,19 +1,13 @@
-import { handleStt } from "@/sse/handlers/stt.js";
+import { batchCorsHeaders, handleBatchTranscription } from "@/stt/batchGateway.js";
 
-// Allow large audio uploads — 5min for processing large files
+// Speechmatics batch jobs may take longer than a typical function invocation.
 export const maxDuration = 300;
 
 export async function OPTIONS() {
-  return new Response(null, {
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "*",
-    },
-  });
+  return new Response(null, { status: 204, headers: batchCorsHeaders() });
 }
 
-/** POST /v1/audio/transcriptions - OpenAI Whisper compatible STT */
+/** POST /v1/audio/transcriptions — provider-independent, OpenAI-compatible STT. */
 export async function POST(request) {
-  return await handleStt(request);
+  return handleBatchTranscription(request);
 }

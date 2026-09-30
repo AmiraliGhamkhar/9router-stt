@@ -123,7 +123,8 @@ export async function POST(request) {
     try {
       let Database;
       try {
-        const mod = await import("better-sqlite3");
+        const loadOptional = new Function("name", "return import(name)");
+        const mod = await loadOptional("better-sqlite3");
         Database = mod.default || mod;
       } catch {
         // fallback ignored
