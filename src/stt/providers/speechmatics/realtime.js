@@ -2,7 +2,7 @@ import WebSocket from "ws";
 import { SttError } from "../../error.js";
 import { RealtimeProvider } from "../realtimeBase.js";
 
-const ENDPOINT = "wss://eu.rt.speechmatics.com/v2";
+const ENDPOINT = "wss://eu.rt.speechmatics.com/v2/";
 const CONNECT_TIMEOUT_MS = 15_000;
 
 export class SpeechmaticsRealtimeProvider extends RealtimeProvider {
@@ -44,7 +44,14 @@ export class SpeechmaticsRealtimeProvider extends RealtimeProvider {
         status: 502, code: "upstream_connection_failed", type: "provider_error", provider: "speechmatics",
       })));
       this.socket.on("close", (code) => {
-        if (!this.closed && settled) this.emit("close", { code });
+        if (this.closed) return;
+        if (!settled) {
+          finish(reject, new SttError("Speechmatics realtime connection closed before it was ready", {
+            status: 502, code: "upstream_disconnected", type: "provider_error", provider: "speechmatics",
+          }));
+        } else {
+          this.emit("close", { code });
+        }
       });
     });
   }
@@ -80,7 +87,11 @@ export class SpeechmaticsRealtimeProvider extends RealtimeProvider {
         type: "provider_error",
         provider: "speechmatics",
       });
-      if (pending?.finish) pending.finish(pending.reject, error);
+      // The same message listener is used during and after the handshake.
+      // Once RecognitionStarted has settled the connect promise, provider
+      // errors must be emitted to the gateway rather than passed to the
+      // already-settled promise (which would silently drop them).
+      if (!this.ready && pending?.finish) pending.finish(pending.reject, error);
       else this.emit("error", error);
     }
   }

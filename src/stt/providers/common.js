@@ -30,6 +30,32 @@ export function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+/**
+ * Keep an upstream HTTP request from outliving the gateway operation. The
+ * caller can still inject a fake fetch implementation in contract tests; the
+ * signal is part of the normal fetch contract and is ignored by simple fakes.
+ */
+export async function fetchWithTimeout(fetchImpl, url, options, { provider, timeoutMs = 30_000 } = {}) {
+  const controller = new AbortController();
+  const boundedTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 30_000;
+  const timer = setTimeout(() => controller.abort(), boundedTimeout);
+  try {
+    return await fetchImpl(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new SttError(`${provider} upstream request timed out`, {
+        status: 504,
+        code: "upstream_timeout",
+        type: "provider_error",
+        provider: provider?.toLowerCase(),
+      });
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function compactMetadata(source, names) {
   const metadata = {};
   for (const name of names) {

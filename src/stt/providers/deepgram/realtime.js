@@ -47,7 +47,14 @@ export class DeepgramRealtimeProvider extends RealtimeProvider {
       this.socket.on("message", (data) => this.handleMessage(data));
       this.socket.on("close", (code) => {
         this.clearKeepAlive();
-        if (!this.closed) this.emit("close", { code });
+        if (this.closed) return;
+        if (!settled) {
+          finish(reject, new SttError("Deepgram realtime connection closed before it was ready", {
+            status: 502, code: "upstream_disconnected", type: "provider_error", provider: "deepgram",
+          }));
+        } else {
+          this.emit("close", { code });
+        }
       });
     });
     this.keepAlive = setInterval(() => {

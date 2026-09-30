@@ -1,5 +1,5 @@
 import { SttError } from "../../error.js";
-import { assertUpstreamOk, audioContentType, compactMetadata, responseJson } from "../common.js";
+import { assertUpstreamOk, audioContentType, compactMetadata, fetchWithTimeout, responseJson } from "../common.js";
 
 const ENDPOINT = "https://api.deepgram.com/v1/listen";
 
@@ -24,10 +24,13 @@ export async function transcribeDeepgram({ file, model, language, token, verbose
   if (language) url.searchParams.set("language", language);
   else url.searchParams.set("detect_language", "true");
 
-  const response = await fetchImpl(url, {
+  const response = await fetchWithTimeout(fetchImpl, url, {
     method: "POST",
     headers: { Authorization: `Token ${token}`, "Content-Type": audioContentType(file) },
     body: await file.arrayBuffer(),
+  }, {
+    provider: "Deepgram",
+    timeoutMs: Number(process.env.STT_BATCH_REQUEST_TIMEOUT_MS) || 30_000,
   });
   await assertUpstreamOk(response, "Deepgram");
   const payload = await responseJson(response, "Deepgram");
