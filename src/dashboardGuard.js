@@ -160,6 +160,25 @@ async function canAccessPublicLlmApi(request) {
   return await hasValidApiKey(request);
 }
 
+// The STT gateway has a deliberately separate server-side key for deployments
+// that do not use the dashboard key database. Limit it to STT discovery and
+// transcription paths; it must never unlock the legacy LLM endpoints.
+function hasConfiguredSttGatewayKey(request) {
+  const configured = process.env.STT_GATEWAY_API_KEY;
+  if (!configured) return false;
+  return extractApiKey(request) === configured;
+}
+
+function isSttGatewayApi(pathname) {
+  return pathname === "/v1/audio/transcriptions" || pathname === "/v1/models/stt";
+}
+
+function isTrustedSttLoopbackRequest(request) {
+  return hasTrustedPeerHeaders(request)
+    && !request.headers.get("x-9r-via-proxy")
+    && isLoopbackHostname(request.headers.get("x-9r-real-ip"));
+}
+
 async function canAccessLocalOnlyRoute(request) {
   if (await hasValidCliToken(request)) return true;
   // Browser on host: loopback Host + Origin (blocks tunnel/CSRF) + auth (JWT or requireLogin=false)
@@ -201,6 +220,8 @@ export const __test__ = {
   isPublicLlmApi,
   extractApiKey,
   canAccessPublicLlmApi,
+  hasConfiguredSttGatewayKey,
+  isSttGatewayApi,
   canAccessLocalOnlyRoute,
 };
 
@@ -219,6 +240,19 @@ export async function proxy(request) {
     if (await hasValidCliToken(request) || await hasValidToken(request))
       return NextResponse.next();
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Liveness must remain safe to call from an orchestrator. It does not expose
+  // provider configuration and it performs no provider call.
+  if (pathname === "/v1/health") return NextResponse.next();
+
+  if (isSttGatewayApi(pathname)) {
+    // Unlike legacy public LLM paths, an STT no-key development request needs a
+    // peer proof. Do not let a development Host-header fallback reach the STT
+    // route, where it could otherwise unlock provider-backed transcription.
+    if (isTrustedSttLoopbackRequest(request)) return NextResponse.next();
+    if (hasConfiguredSttGatewayKey(request) || await hasValidApiKey(request)) return NextResponse.next();
+    return NextResponse.json({ error: "Gateway API key required for remote STT access" }, { status: 401 });
   }
 
   if (isPublicLlmApi(pathname)) {

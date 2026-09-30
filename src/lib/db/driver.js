@@ -24,10 +24,14 @@ async function tryBetterSqlite() {
   const [nodeMajor] = process.versions.node.split(".").map(Number);
   if (nodeMajor >= 24) return null;
   try {
+    // Resolve first so installations that intentionally omit optional native
+    // dependencies do not create a noisy failed dynamic import on every boot.
+    const { createRequire } = await import("node:module");
+    const resolve = createRequire(import.meta.url);
+    resolve.resolve(["better", "sqlite3"].join("-"));
     const { createBetterSqliteAdapter } = await import("./adapters/betterSqliteAdapter.js");
-    return createBetterSqliteAdapter(DATA_FILE);
-  } catch (e) {
-    console.warn(`[DB] better-sqlite3 unavailable: ${e.message}`);
+    return await createBetterSqliteAdapter(DATA_FILE);
+  } catch {
     return null;
   }
 }

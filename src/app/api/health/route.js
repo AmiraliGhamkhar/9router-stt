@@ -6,8 +6,9 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "*",
 };
 
+// Deliberately lightweight: no provider calls, credentials, or readiness details.
 export async function GET() {
-  return NextResponse.json({ ok: true }, { headers: CORS_HEADERS });
+  return NextResponse.json({ status: "ok" }, { headers: CORS_HEADERS });
 }
 
 export async function OPTIONS() {

@@ -306,3 +306,43 @@ describe("dashboard guard helpers", () => {
     expect(__test__.extractApiKey(apiRequest)).toBe("header-key");
   });
 });
+
+describe("dashboard guard STT gateway key scope", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.NINEROUTER_PEER_TOKEN = PEER_TOKEN;
+    process.env.STT_GATEWAY_API_KEY = "stt-gateway-test-key";
+    mocks.validateApiKey.mockResolvedValue(false);
+  });
+
+  it("allows a remote STT request with the configured gateway key", async () => {
+    const response = await proxy(request("/v1/audio/transcriptions", {
+      host: "router.example.com",
+      authorization: "Bearer stt-gateway-test-key",
+    }));
+
+    expect(response).toBe(mocks.nextResponse);
+    expect(mocks.validateApiKey).not.toHaveBeenCalled();
+  });
+
+  it("allows an STT request only when its loopback peer proof is valid", async () => {
+    const response = await proxy(localRequest("/v1/models/stt", { host: "localhost:20128" }));
+
+    expect(response).toBe(mocks.nextResponse);
+  });
+
+  it("does not let the STT gateway key unlock an LLM route", async () => {
+    const response = await proxy(request("/v1/chat/completions", {
+      host: "router.example.com",
+      authorization: "Bearer stt-gateway-test-key",
+    }));
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("API key required for remote API access");
+  });
+
+  it("keeps the versioned STT health check public", async () => {
+    const response = await proxy(request("/v1/health", { host: "router.example.com" }));
+    expect(response).toBe(mocks.nextResponse);
+  });
+});

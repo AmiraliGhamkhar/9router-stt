@@ -42,7 +42,7 @@ RUN if [ "$ALPINE_MIRROR" != "dl-cdn.alpinelinux.org" ]; then \
       sed -i "s|dl-cdn.alpinelinux.org|${ALPINE_MIRROR}|g" /etc/apk/repositories; \
     fi
 
-LABEL org.opencontainers.image.title="9router" \
+LABEL org.opencontainers.image.title="9router-stt" \
       org.opencontainers.image.version="${APP_VERSION}"
 
 ENV NODE_ENV=production
@@ -56,6 +56,11 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/custom-server.js ./custom-server.js
 COPY --from=builder /app/open-sse ./open-sse
+# The custom WebSocket server imports this small, framework-independent STT
+# runtime directly so it can own long-lived upstream socket lifecycles.
+COPY --from=builder /app/src/stt ./src/stt
+COPY --from=builder /app/src/lib/db ./src/lib/db
+COPY --from=builder /app/src/lib/dataDir.js ./src/lib/dataDir.js
 # Next file tracing can omit sibling files; MITM runs server.js as a separate process.
 COPY --from=builder /app/src/mitm ./src/mitm
 # Standalone node_modules may omit deps only required by the MITM child process.
@@ -67,6 +72,8 @@ COPY --from=builder /app/node_modules/next ./node_modules/next
 COPY --from=builder /app/node_modules/sql.js ./node_modules/sql.js
 # node-machine-id is createRequire-loaded at runtime; tracing omits it.
 COPY --from=builder /app/node_modules/node-machine-id ./node_modules/node-machine-id
+# Used by the long-running /v1/realtime gateway for both client and upstream sockets.
+COPY --from=builder /app/node_modules/ws ./node_modules/ws
 
 RUN mkdir -p /app/data && chown -R node:node /app && \
   mkdir -p /app/data-home && chown node:node /app/data-home && \
