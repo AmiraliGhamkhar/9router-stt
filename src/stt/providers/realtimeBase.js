@@ -4,6 +4,7 @@ import { EventEmitter } from "node:events";
  * Small common realtime contract:
  *   connect() -> Promise<void>
  *   sendAudio(Buffer) -> void
+ *   receiveEvents(listener) -> unsubscribe function
  *   close() -> Promise<void>
  *
  * Instances emit normalized `event`, `error`, and `close` events. Provider
@@ -20,6 +21,12 @@ export class RealtimeProvider extends EventEmitter {
     this.sampleRate = sampleRate;
     this.encoding = encoding;
     this.closed = false;
+  }
+
+  receiveEvents(listener) {
+    if (typeof listener !== "function") throw new TypeError("Realtime event listener must be a function");
+    this.on("event", listener);
+    return () => this.off("event", listener);
   }
 
   normalizedTranscript({ text, final, startTime, endTime, confidence, language, speaker, speechFinal }) {

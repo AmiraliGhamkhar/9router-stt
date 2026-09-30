@@ -153,12 +153,20 @@ http.createServer = (...args) => {
 
 if (require.main === module) {
   const isDevelopmentServer = process.argv[2] === "dev";
-  const standalone = path.join(__dirname, "server.js");
-  if (!isDevelopmentServer && fs.existsSync(standalone)) {
+  // Docker copies the standalone server beside this entrypoint. For a normal
+  // checkout, `next build` puts it under .next/standalone; prefer that server
+  // as well so `npm run start` is a real production start rather than the
+  // unsupported `next start` fallback for output: standalone builds.
+  const standaloneCandidates = [
+    path.join(__dirname, "server.js"),
+    path.join(__dirname, ".next", "standalone", "server.js"),
+  ];
+  const standalone = standaloneCandidates.find((candidate) => fs.existsSync(candidate));
+  if (!isDevelopmentServer && standalone) {
     require(standalone);
   } else {
-    // Repo checkout has no standalone build next to us. Start both dev and production
-    // Next servers in-process so the peer-header and STT WebSocket wrappers apply.
+    // Repo checkout without a production build: start Next in-process so the
+    // peer-header and STT WebSocket wrappers still apply.
     const nextBin = require.resolve("next/dist/bin/next");
     const command = isDevelopmentServer ? "dev" : "start";
     const args = isDevelopmentServer ? process.argv.slice(3) : process.argv.slice(2);

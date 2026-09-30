@@ -42,9 +42,9 @@ any gateway endpoint. `STT_ALLOW_INSECURE_LOCAL=true` is an explicitly
 custom server running with `NODE_ENV=development`, which stamps an internal
 proof only after verifying a direct TCP loopback peer; a request through a
 proxy never receives that proof. The production server never creates that
-proof. For isolated local development, start the custom server with
-`NODE_ENV=development STT_ALLOW_INSECURE_LOCAL=true npm run start`. Do not set
-this flag in production; remote requests remain key-authenticated.
+proof. For isolated local development, after a production build start the custom server
+with `NODE_ENV=development STT_ALLOW_INSECURE_LOCAL=true npm run start`. Do not
+set this flag in production; remote requests remain key-authenticated.
 
 ## Batch transcription
 
@@ -201,6 +201,7 @@ sessions.
 | `STT_ROUTING_JSON` | Optional deterministic routes JSON |
 | `STT_MODEL_ALIASES_JSON` | Optional configured model aliases JSON |
 | `STT_MAX_UPLOAD_BYTES` | Batch upload limit, default 25 MiB |
+| `STT_BATCH_REQUEST_TIMEOUT_MS` | Per-request provider HTTP timeout, default 30 seconds |
 | `STT_REALTIME_MAX_CONNECTIONS` | Concurrent realtime session cap |
 | `STT_REALTIME_MAX_FRAME_BYTES` | Binary frame size cap |
 | `STT_REALTIME_IDLE_MS` | Idle realtime timeout |

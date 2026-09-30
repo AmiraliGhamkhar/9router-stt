@@ -170,7 +170,13 @@ function hasConfiguredSttGatewayKey(request) {
 }
 
 function isSttGatewayApi(pathname) {
-  return pathname === "/v1/audio/transcriptions" || pathname === "/v1/models/stt";
+  // The public /v1 paths are rewrites to these handlers. Keep the handler
+  // paths protected too: direct access must not fall through the legacy LLM
+  // allow-list and accidentally reject or bypass the dedicated STT key.
+  return pathname === "/v1/audio/transcriptions"
+    || pathname === "/v1/models/stt"
+    || pathname === "/api/v1/audio/transcriptions"
+    || pathname === "/api/v1/models/stt";
 }
 
 function isTrustedSttLoopbackRequest(request) {
@@ -243,8 +249,11 @@ export async function proxy(request) {
   }
 
   // Liveness must remain safe to call from an orchestrator. It does not expose
-  // provider configuration and it performs no provider call.
-  if (pathname === "/v1/health") return NextResponse.next();
+  // provider configuration and it performs no provider call. Check both the
+  // public rewrite and direct API paths because middleware runs before rewrites.
+  if (pathname === "/health" || pathname === "/api/health" || pathname === "/v1/health" || pathname === "/api/v1/health") {
+    return NextResponse.next();
+  }
 
   if (isSttGatewayApi(pathname)) {
     // Unlike legacy public LLM paths, an STT no-key development request needs a

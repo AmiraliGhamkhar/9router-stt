@@ -28,7 +28,7 @@ describe("trusted loopback detection", () => {
 
 function realtimeContract(Adapter, provider) {
   it(`${provider} implements the shared realtime adapter contract`, () => {
-    for (const method of ["connect", "sendAudio", "close"]) {
+    for (const method of ["connect", "sendAudio", "receiveEvents", "close"]) {
       expect(typeof Adapter.prototype[method]).toBe("function");
     }
   });
@@ -106,5 +106,15 @@ describe("realtime event normalization", () => {
       results: [{ alternatives: [{ confidence: 0.92, language: "fa" }] }],
     })));
     expect(events).toEqual([expect.objectContaining({ type: "transcript", text: "متن", final: false, language: "fa" })]);
+  });
+
+  it("forwards a post-handshake Speechmatics error to the gateway", () => {
+    const adapter = new SpeechmaticsRealtimeProvider({ provider: "speechmatics", model: "enhanced", language: "en", requestId: "stt_test", token: "secret", sampleRate: 16000, encoding: "pcm_s16le" });
+    adapter.ready = true;
+    const errors = [];
+    adapter.on("error", (error) => errors.push(error));
+    adapter.handleMessage(Buffer.from(JSON.stringify({ message: "Error", type: "not_authorised" })));
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({ code: "upstream_authentication_failed", provider: "speechmatics" });
   });
 });

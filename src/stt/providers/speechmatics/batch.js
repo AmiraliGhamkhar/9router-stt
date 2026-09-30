@@ -1,5 +1,5 @@
 import { SttError, upstreamError } from "../../error.js";
-import { assertUpstreamOk, compactMetadata, responseJson, wait } from "../common.js";
+import { assertUpstreamOk, compactMetadata, fetchWithTimeout, responseJson, wait } from "../common.js";
 
 const API_BASE = "https://eu1.asr.api.speechmatics.com/v2";
 const DEFAULT_TIMEOUT_MS = 120_000;
@@ -34,11 +34,12 @@ function toSegments(results) {
   }).filter((segment) => segment.text);
 }
 
-async function pollJob(id, token, fetchImpl, deadline) {
+async function pollJob(id, token, fetchImpl, deadline, requestTimeoutMs) {
   while (Date.now() < deadline) {
-    const response = await fetchImpl(endpoint(`/jobs/${encodeURIComponent(id)}`), {
+    const remainingMs = Math.max(1, Math.min(requestTimeoutMs, deadline - Date.now()));
+    const response = await fetchWithTimeout(fetchImpl, endpoint(`/jobs/${encodeURIComponent(id)}`), {
       headers: { Authorization: `Bearer ${token}` },
-    });
+    }, { provider: "Speechmatics", timeoutMs: remainingMs });
     await assertUpstreamOk(response, "Speechmatics");
     const job = await responseJson(response, "Speechmatics");
     const status = String(job?.job?.status || job?.status || "").toLowerCase();
@@ -57,6 +58,7 @@ async function pollJob(id, token, fetchImpl, deadline) {
 
 /** Speechmatics Jobs API adapter. Audio remains in memory until it is sent upstream. */
 export async function transcribeSpeechmatics({ file, model, language, token, verbose = false, fetchImpl = fetch, timeoutMs = DEFAULT_TIMEOUT_MS }) {
+  const requestTimeoutMs = Number(process.env.STT_BATCH_REQUEST_TIMEOUT_MS) || 30_000;
   const config = {
     type: "transcription",
     transcription_config: { language, model },
@@ -65,11 +67,11 @@ export async function transcribeSpeechmatics({ file, model, language, token, ver
   form.append("data_file", file, file.name || "audio.wav");
   form.append("config", JSON.stringify(config));
 
-  const submission = await fetchImpl(endpoint("/jobs"), {
+  const submission = await fetchWithTimeout(fetchImpl, endpoint("/jobs"), {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: form,
-  });
+  }, { provider: "Speechmatics", timeoutMs: requestTimeoutMs });
   await assertUpstreamOk(submission, "Speechmatics");
   const submitted = await responseJson(submission, "Speechmatics");
   const jobId = submitted?.id || submitted?.job?.id;
@@ -79,10 +81,10 @@ export async function transcribeSpeechmatics({ file, model, language, token, ver
     });
   }
 
-  const job = await pollJob(jobId, token, fetchImpl, Date.now() + timeoutMs);
-  const transcriptResponse = await fetchImpl(endpoint(`/jobs/${encodeURIComponent(jobId)}/transcript?format=json-v2`), {
+  const job = await pollJob(jobId, token, fetchImpl, Date.now() + timeoutMs, requestTimeoutMs);
+  const transcriptResponse = await fetchWithTimeout(fetchImpl, endpoint(`/jobs/${encodeURIComponent(jobId)}/transcript?format=json-v2`), {
     headers: { Authorization: `Bearer ${token}` },
-  });
+  }, { provider: "Speechmatics", timeoutMs: requestTimeoutMs });
   if (!transcriptResponse.ok) {
     try { await transcriptResponse.text(); } catch {}
     throw upstreamError("Speechmatics", transcriptResponse.status);
